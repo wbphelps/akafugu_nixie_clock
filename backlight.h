@@ -21,7 +21,7 @@
 #if defined(HAVE_RGB_BACKLIGHT)
 #define BACKLIGHT_MODES 11
 #elif defined(HAVE_LED_BACKLIGHT)
-#define BACKLIGHT_MODES 5
+#define BACKLIGHT_MODES 6  // wbp
 #endif
 
 void init_backlight();

@@ -11,6 +11,13 @@
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
  * PARTICULAR PURPOSE.  See the GNU General Public License for more details.
  *
+ * wbp updates:
+ * 1) backlight mode order - dim to bright, then flash
+ * 2) use Serial for GPS read (instead of registers)
+ * 3) save LED display mode in EE
+ * 4) save menu settings in EE when changed
+ * 5) support for 4800 & 9600 BPS GPS
+ *
  */
 
 #include "global.h"
@@ -88,10 +95,12 @@ volatile bool g_blink_on = true;
 volatile uint16_t g_rotary_moved_timer;
 
 #ifdef HAVE_GPS
-volatile bool g_gps_enabled = false;
+volatile bool g_gps_enabled = 0;  // zero = off
 volatile int8_t g_TZ_hour;
 volatile int8_t g_TZ_minute;
 volatile uint8_t g_dst_offset;
+volatile bool g_gps_nosignal = false;
+volatile uint16_t g_gps_timer = 0;
 #endif
 
 // Display sleep mode
@@ -112,6 +121,8 @@ volatile bool g_wakeup_sound = true;
 volatile bool g_screensaver = false;
 // Cathode anti-poisoning
 volatile bool g_antipoison = true;
+// Backlight mode
+volatile uint8_t g_backlight_mode = 2;
 // Number of digits
 #ifdef MODULAR_6D
 volatile uint8_t g_digits = 6;
@@ -159,11 +170,11 @@ void display_init()
   read_eeprom();
   
   if (g_wakeup_sound) {
-    tone(PinMap::piezo, NOTE_A4, 500);
-    delay(100);
-    tone(PinMap::piezo, NOTE_C3, 750);
-    delay(100);
-    tone(PinMap::piezo, NOTE_A4, 500);
+    tone(PinMap::piezo, NOTE_A3, 500);
+    delay(250);
+    tone(PinMap::piezo, NOTE_C5, 500);
+    delay(250);
+    tone(PinMap::piezo, NOTE_A3, 500);
     delay(500);
   }
   else {
@@ -200,7 +211,8 @@ void display_init()
   Wire.begin();
 
   init_backlight();
-
+  set_backlight_mode(g_backlight_mode);
+	
   rtc.begin();
 
   // enable SQW interrupt from RTC at 1Hz
@@ -211,10 +223,11 @@ void display_init()
   display_on = true;
 
 #ifdef HAVE_GPS
-    gps_init(g_gps_enabled ? 48 : 0); // fixme: support both modes
+    if (g_gps_enabled > 0)
+      gps_init(g_gps_enabled); // initialize GPS vars and the serial port
 #endif // HAVE_GPS
   
-  Serial.begin(9600);
+//  Serial.begin(9600);  // gps_init does Serial.begin
 }
 
 void read_eeprom()
@@ -228,12 +241,13 @@ void read_eeprom()
     g_wakeup_sound = EEPROM.read(4);
     g_screensaver = EEPROM.read(5);
     g_antipoison = EEPROM.read(6);
+    g_backlight_mode = EEPROM.read(7); // wbp
     
 #ifdef HAVE_GPS
-    g_gps_enabled = EEPROM.read(7);
-    g_TZ_hour     = EEPROM.read(8);
-    g_TZ_minute   = EEPROM.read(9);
-    g_dst_offset  = EEPROM.read(10);
+    g_gps_enabled = EEPROM.read(8);
+    g_TZ_hour     = EEPROM.read(9);
+    g_TZ_minute   = EEPROM.read(10);
+    g_dst_offset  = EEPROM.read(11);
 #endif
     
     //Serial.print("g_24h = ");
@@ -266,17 +280,18 @@ void write_eeprom()
   EEPROM.write(4, g_wakeup_sound);
   EEPROM.write(5, g_screensaver);
   EEPROM.write(6, g_antipoison);
+  EEPROM.write(7, g_backlight_mode);
   
 #ifdef HAVE_GPS
-  EEPROM.write(7, g_gps_enabled);
-  EEPROM.write(8, g_TZ_hour);
-  EEPROM.write(9, g_TZ_minute);
-  EEPROM.write(10, g_dst_offset);
+  EEPROM.write(8, g_gps_enabled);
+  EEPROM.write(9, g_TZ_hour);
+  EEPROM.write(10, g_TZ_minute);
+  EEPROM.write(11, g_dst_offset);
 #else
-  EEPROM.write(7, 0);
   EEPROM.write(8, 0);
   EEPROM.write(9, 0);
   EEPROM.write(10, 0);
+  EEPROM.write(11, 0);
 #endif
 
   //Serial.print("g_24h = ");
@@ -311,6 +326,12 @@ uint8_t gps_counter = 0;
 ISR(TIMER2_OVF_vect)
 {
 
+#ifdef FEATURE_GPS
+  if (++gps_counter == 4) {  // every 0.001024 seconds
+    GPSread();  // check for data on the serial port
+    gps_counter = 0;
+  }
+#endif // HAVE_GPS
 #ifdef HAVE_HV5812
   if (interrupt_counter++ == 2) {
       display_multiplex();
@@ -326,12 +347,6 @@ ISR(TIMER2_OVF_vect)
     button_counter = 0;
   }
   
-#ifdef FEATURE_GPS
-  if (++gps_counter == 4) {  // every 0.001024 seconds
-    GPSread();  // check for data on the serial port
-    gps_counter = 0;
-  }
-#endif // HAVE_GPS
 }
 
 // RTC SQW output interrupt and alarm switch change interrupt
@@ -453,6 +468,8 @@ void read_rtc(void)
 
   g_is_am = t->am;
   uint8_t hour = g_24h ? t->hour : t->twelveHour;
+  if (!g_24h && hour == 0)  // show 12 for midnight and noon - wbp
+    hour = 12;  // wbp
 
   if (g_display_mode == 0) { // primary display mode
     
@@ -598,6 +615,8 @@ void handle_button_3()
             button.b3_keyup = 0;
             increment_backlight_mode();
             tick();
+            // write all settings to EEPROM (wbp)
+            write_eeprom();    
         }
         break;
     case STATE_SHOW_ALARM:
@@ -653,7 +672,7 @@ void loop() {
   
   while(1) {
 #ifdef HAVE_GPS
-    if (g_gps_enabled && g_clock_state == STATE_CLOCK) {
+    if ((g_gps_enabled > 0) && g_clock_state == STATE_CLOCK) {
       if (gpsDataReady()) {
         parseGPSdata(gpsNMEA());  // get the GPS serial stream and possibly update the clock 
       }
@@ -1159,7 +1178,8 @@ void loop() {
           if (button.b1_keyup) { // Go to STATE_MENU_GPS_TZH
             g_gps_enabled = rotary.getPosition();
             
-            gps_init(g_gps_enabled ? 48 : 0); // fixme: support both modes
+            if (g_gps_enabled > 0)
+              gps_init(g_gps_enabled); // initalize serial port and GPS vars
           
             rotary.setDivider(4);
             rotary.setRange(0, 27);

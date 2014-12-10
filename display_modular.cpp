@@ -28,6 +28,7 @@ extern state_t g_clock_state;
 extern volatile bool g_24h;
 extern volatile bool g_is_am;
 
+extern int8_t g_gps_updating;  // for signalling GPS update on some displays
 // anodes (digits)
 pin_direct_t digit0_pin;
 pin_direct_t digit1_pin;
@@ -125,8 +126,8 @@ void set_dots(bool dot1, bool dot2)
 
 void set_alarm_led(bool on)
 {
-  Serial.print("set_alarm_led: ");
-  Serial.println(on);
+//  Serial.print("set_alarm_led: ");
+//  Serial.println(on);
   if (on) digitalWrite(PinMap::alarm_dot, HIGH);
   else    digitalWrite(PinMap::alarm_dot, LOW);  
 }
@@ -186,15 +187,18 @@ void display_multiplex(void)
 #ifdef MODULAR_6D
   if (multiplex_counter == 0) {
     clear_display();
-    display_on ? write_nixie(0, data[5], data[2]) : clear_display();    
+//    display_on ? write_nixie(0, data[5], data[2]) : clear_display();    
+    if (display_on) write_nixie(0, data[5], data[2]);  // wbp
   }
   else if (multiplex_counter == 2) {
     clear_display();
-    display_on ? write_nixie(1, data[4], data[1]) : clear_display();
+//    display_on ? write_nixie(1, data[4], data[1]) : clear_display();
+    if (display_on) write_nixie(1, data[4], data[1]);
   }
   else if (multiplex_counter == 4) {
     clear_display();
-    display_on ? write_nixie(2, data[3], data[0]) : clear_display();
+//    display_on ? write_nixie(2, data[3], data[0]) : clear_display();
+    if (display_on) write_nixie(2, data[3], data[0]);
   }
 
   multiplex_counter++;
@@ -205,11 +209,13 @@ void display_multiplex(void)
 #ifdef MODULAR_4D
   if (multiplex_counter == 0) {
     clear_display();
-    display_on ? write_nixie(0, data[5], data[3]) : clear_display();    
+//    display_on ? write_nixie(0, data[5], data[3]) : clear_display();    
+    if (display_on) write_nixie(0, data[5], data[3]);
   }
   else if (multiplex_counter == 2) {
     clear_display();
-    display_on ? write_nixie(1, data[4], data[2]) : clear_display();
+//    display_on ? write_nixie(1, data[4], data[2]) : clear_display();
+    if (display_on) write_nixie(1, data[4], data[2]);
   }
 
   multiplex_counter++;

@@ -17,6 +17,7 @@
 
 static uint8_t saved_mode;
 extern volatile uint8_t g_digits;
+extern volatile uint8_t g_backlight_mode;
 
 #if defined(HAVE_RGB_BACKLIGHT)
 
@@ -122,25 +123,28 @@ volatile bool g_pulse;
 
 void set_backlight_mode(uint8_t mode)
 {
-    Serial.print("set_backlight_mode ");
-    Serial.println(mode);
+    //Serial.print("set_backlight_mode ");
+    //Serial.println(mode);
   
     saved_mode = mode;
     g_pulse = false;
   
     if (mode == 0) {
-       set_backlight(255);
-    }
-    else if (mode == 1) {
        set_backlight(0);
     }
+    else if (mode == 1) {
+       set_backlight(63);
+    }
     else if (mode == 2) {
-       set_backlight(100);
+       set_backlight(127);
     }
     else if (mode == 3) {
-       set_backlight(200);
+       set_backlight(191);
     }
     else if (mode == 4) {
+       set_backlight(255);
+    }
+    else if (mode == 5) {
        set_backlight(0);
        g_pulse = true; 
     }
@@ -183,6 +187,7 @@ void increment_backlight_mode()
         saved_mode = 0;
     
     set_backlight_mode(saved_mode);    
+    g_backlight_mode = saved_mode;
 }
 
 void push_backlight_mode()

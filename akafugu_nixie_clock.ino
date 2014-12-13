@@ -11,6 +11,9 @@
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
  * PARTICULAR PURPOSE.  See the GNU General Public License for more details.
  *
+ * jlg updates:
+ * 1) fix auto sleep time check
+ *
  * wbp updates:
  * 1) backlight mode order - dim to bright, then flash
  * 2) use Serial for GPS read (instead of registers)
@@ -99,7 +102,7 @@ volatile uint16_t g_rotary_moved_timer;
 volatile uint8_t g_gps_enabled = 0;  // zero = off
 volatile int8_t g_TZ_hour;
 volatile int8_t g_TZ_minute;
-volatile int8_t g_dst_offset;
+volatile int8_t g_DST_offset;
 volatile bool g_DST_updated;  // DST update flag = allow update only once per day
 volatile bool g_gps_nosignal = false;
 volatile bool g_gps_updating = false;  // for signalling GPS update on some displays
@@ -107,8 +110,10 @@ volatile uint16_t g_gps_timer = 0;  // for tracking how long since GPS last upda
 #endif
 
 // Display sleep mode
-#define SLEEP_MODE_START_TIME 2 // sleep mode starts at 2:00 at night
+#define SLEEP_MODE_START_TIME 21 // sleep mode starts at 21:00 at night
 #define SLEEP_MODE_END_TIME 7   // sleep mode ends at 7:00 in the morning
+// Display sleep mode
+volatile bool g_screensaver_on = false;
 
 ///////////////////////
 // Settings (saved to EEPROM)
@@ -250,7 +255,7 @@ void read_eeprom()
     g_gps_enabled = EEPROM.read(8);
     g_TZ_hour     = EEPROM.read(9);
     g_TZ_minute   = EEPROM.read(10);
-    g_dst_offset  = EEPROM.read(11);
+    g_DST_offset  = EEPROM.read(11);
 #endif
     
     //Serial.print("g_24h = ");
@@ -289,7 +294,7 @@ void write_eeprom()
   EEPROM.write(8, g_gps_enabled);
   EEPROM.write(9, g_TZ_hour);
   EEPROM.write(10, g_TZ_minute);
-  EEPROM.write(11, g_dst_offset);
+  EEPROM.write(11, g_DST_offset);
 #else
   EEPROM.write(8, 0);
   EEPROM.write(9, 0);
@@ -441,13 +446,30 @@ void read_rtc(void)
     }
   }
 
+  // jgl - is it time to update the backlight?
+  if (g_screensaver && t->sec < 1 && t->min < 1 && (t->hour == SLEEP_MODE_START_TIME || t->hour == SLEEP_MODE_END_TIME)) {
+    g_update_backlight = true;
+  }
+
   // check for display sleep mode
-  if (g_screensaver && t->hour >= SLEEP_MODE_START_TIME && t->hour < SLEEP_MODE_END_TIME) {
+  // jgl - allow start time in evening, turn off LED backlights as well
+
+  if (g_screensaver && (SLEEP_MODE_START_TIME < SLEEP_MODE_END_TIME) && (t->hour >= SLEEP_MODE_START_TIME && t->hour < SLEEP_MODE_END_TIME)) {
+    g_screensaver_on = true;
+  }
+  else if (g_screensaver && (SLEEP_MODE_START_TIME > SLEEP_MODE_END_TIME) && (t->hour >= SLEEP_MODE_START_TIME || t->hour < SLEEP_MODE_END_TIME)) {
+    g_screensaver_on = true;
+  }
+  else {
+    g_screensaver_on = false;
+  }
+
+  if (g_screensaver_on) {  // blank the display and LEDs
     data[0] = data[1] = data[2] = data[3] = data[4] = data[5] = 10;
     set_dots(false, false);
     return;
   }
-  
+ 
   // check if it is time for anti-poisoning routine
   if (g_antipoison && t->sec < 1 && t->min % 5 == 0)
     enter_anti_poison_mode();
@@ -1226,7 +1248,7 @@ void loop() {
             
             rotary.setDivider(10);
             rotary.setRange(0, 1);
-            rotary.setPosition(g_dst_offset);
+            rotary.setPosition(g_DST_offset);
             g_clock_state = STATE_MENU_DST_OFFSET;            
           }
           else {
@@ -1238,7 +1260,7 @@ void loop() {
         case STATE_MENU_DST_OFFSET: // menu item 10 (0, 1)
         {
           if (button.b1_keyup) {
-            g_dst_offset = rotary.getPosition();
+            g_DST_offset = rotary.getPosition();
             
             exit_menu();
           }

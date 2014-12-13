@@ -17,6 +17,7 @@
  * 3) save LED display mode in EE
  * 4) save menu settings in EE when changed
  * 5) support for 4800 & 9600 BPS GPS
+ * 6) GPS enabled settings & menu
  *
  */
 
@@ -95,12 +96,14 @@ volatile bool g_blink_on = true;
 volatile uint16_t g_rotary_moved_timer;
 
 #ifdef HAVE_GPS
-volatile bool g_gps_enabled = 0;  // zero = off
+volatile uint8_t g_gps_enabled = 0;  // zero = off
 volatile int8_t g_TZ_hour;
 volatile int8_t g_TZ_minute;
-volatile uint8_t g_dst_offset;
+volatile int8_t g_dst_offset;
+volatile bool g_DST_updated;  // DST update flag = allow update only once per day
 volatile bool g_gps_nosignal = false;
-volatile uint16_t g_gps_timer = 0;
+volatile bool g_gps_updating = false;  // for signalling GPS update on some displays
+volatile uint16_t g_gps_timer = 0;  // for tracking how long since GPS last updated
 #endif
 
 // Display sleep mode
@@ -796,7 +799,7 @@ void loop() {
               //Serial.println("Entering custom settings");
               
               rotary.save();
-              rotary.setDivider(10);
+              rotary.setDivider(10);  // shouldn't this be 12 ??? (wbp)
               rotary.setRange(0, 1);
               rotary.setPosition(g_24h);
 
@@ -1155,8 +1158,8 @@ void loop() {
           if (button.b1_keyup) { // go to STATE_MENU_GPS
             g_antipoison = rotary.getPosition();
             
-            rotary.setRange(0, 1);
-            rotary.setPosition(g_gps_enabled);
+            rotary.setRange(0, 2);  // three choices
+            rotary.setPosition(g_gps_enabled);  
             g_clock_state = STATE_MENU_GPS;
           }
 #else          
@@ -1176,7 +1179,7 @@ void loop() {
         case STATE_MENU_GPS: // menu item 7 
         {
           if (button.b1_keyup) { // Go to STATE_MENU_GPS_TZH
-            g_gps_enabled = rotary.getPosition();
+            g_gps_enabled = rotary.getPosition();  // set to 0, 1, or 2
             
             if (g_gps_enabled > 0)
               gps_init(g_gps_enabled); // initalize serial port and GPS vars
@@ -1188,7 +1191,7 @@ void loop() {
           }
           else {
             disp2(0, 7);
-            disp2(1, rotary.getPosition());
+            disp2(1, rotary.getPosition()*48);  // display 0, 48, 96
           }
         }
         break;

@@ -37,20 +37,20 @@ volatile char *gpsNextBuffer;
 volatile char *gpsLastBuffer;
 volatile uint8_t gpsDataReady_;
 
-extern int8_t g_gps_enabled;
+extern uint8_t g_gps_enabled;
 extern int8_t g_TZ_hour;
 extern int8_t g_TZ_minute;
-extern int8_t g_gps_nosignal;
+extern bool g_DST_updated;  // DST update flag = allow update only once per day
+extern bool g_gps_updating;  // for signalling GPS update on some displays
+extern bool g_gps_nosignal;
 extern uint16_t g_gps_timer;
 
-int8_t g_gps_updating;  // for signalling GPS update on some displays
 // debugging counters 
 int8_t g_gps_cks_errors;  // gps checksum error counter
 int8_t g_gps_parse_errors;  // gps parse error counter
 int8_t g_gps_time_errors;  // gps time error counter
 int8_t g_DST_mode;  // DST off, on, auto?
 int8_t g_DST_offset;  // DST offset in Hours
-int8_t g_DST_updated;  // DST update flag = allow update only once per day
 
 //volatile uint8_t gpsEnabled = 0;
 #define gpsTimeoutLimit 5  // 5 seconds until we display the "no gps" message
@@ -290,11 +290,11 @@ void gps_init(uint8_t gps) {
   switch (gps) {
     case(0):  // no GPS
       break;
-    case(48):
+    case(1):  // 4800 bps
 //      uart_init(BRRL_4800);
       Serial.begin(4800);
       break;
-    case(96):
+    case(2):  // 9600
 //      uart_init(BRRL_9600);
       Serial.begin(9600);
       break;

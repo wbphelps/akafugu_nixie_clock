@@ -17,6 +17,7 @@
 
 static uint8_t saved_mode;
 extern volatile uint8_t g_digits;
+extern volatile bool g_screensaver_on;  // jgl
 
 #if defined(HAVE_RGB_BACKLIGHT)
 
@@ -122,27 +123,32 @@ volatile bool g_pulse;
 
 void set_backlight_mode(uint8_t mode)
 {
-    Serial.print("set_backlight_mode ");
-    Serial.println(mode);
+//    Serial.print("set_backlight_mode ");
+//    Serial.println(mode);
   
     saved_mode = mode;
     g_pulse = false;
   
-    if (mode == 0) {
-       set_backlight(255);
+    if (g_screensaver_on) {  // jgl - turn off LEDs in sleep mode
+      set_backlight(0);
     }
-    else if (mode == 1) {
-       set_backlight(0);
-    }
-    else if (mode == 2) {
-       set_backlight(100);
-    }
-    else if (mode == 3) {
-       set_backlight(200);
-    }
-    else if (mode == 4) {
-       set_backlight(0);
-       g_pulse = true; 
+    else {
+      if (mode == 0) {
+         set_backlight(255);
+      }
+      else if (mode == 1) {
+         set_backlight(0);
+      }
+      else if (mode == 2) {
+         set_backlight(100);
+      }
+      else if (mode == 3) {
+         set_backlight(200);
+      }
+      else if (mode == 4) {
+         set_backlight(0);
+         g_pulse = true; 
+      }
     }
 }
 

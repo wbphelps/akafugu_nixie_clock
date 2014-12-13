@@ -95,8 +95,10 @@ volatile uint8_t g_dst_offset;
 #endif
 
 // Display sleep mode
-#define SLEEP_MODE_START_TIME 2 // sleep mode starts at 2:00 at night
+#define SLEEP_MODE_START_TIME 21 // sleep mode starts at 21:00 at night
 #define SLEEP_MODE_END_TIME 7   // sleep mode ends at 7:00 in the morning
+// Display sleep mode
+volatile bool g_screensaver_on = false;
 
 ///////////////////////
 // Settings (saved to EEPROM)
@@ -423,13 +425,30 @@ void read_rtc(void)
     }
   }
 
+  // jgl - is it time to update the backlight?
+  if (g_screensaver && t->sec < 1 && t->min < 1 && (t->hour == SLEEP_MODE_START_TIME || t->hour == SLEEP_MODE_END_TIME)) {
+    g_update_backlight = true;
+  }
+
   // check for display sleep mode
-  if (g_screensaver && t->hour >= SLEEP_MODE_START_TIME && t->hour < SLEEP_MODE_END_TIME) {
+  // jgl - allow start time in evening, turn off LED backlights as well
+
+  if (g_screensaver && (SLEEP_MODE_START_TIME < SLEEP_MODE_END_TIME) && (t->hour >= SLEEP_MODE_START_TIME && t->hour < SLEEP_MODE_END_TIME)) {
+    g_screensaver_on = true;
+  }
+  else if (g_screensaver && (SLEEP_MODE_START_TIME > SLEEP_MODE_END_TIME) && (t->hour >= SLEEP_MODE_START_TIME || t->hour < SLEEP_MODE_END_TIME)) {
+    g_screensaver_on = true;
+  }
+  else {
+    g_screensaver_on = false;
+  }
+
+  if (g_screensaver_on) {  // blank the display and LEDs
     data[0] = data[1] = data[2] = data[3] = data[4] = data[5] = 10;
     set_dots(false, false);
     return;
   }
-  
+ 
   // check if it is time for anti-poisoning routine
   if (g_antipoison && t->sec < 1 && t->min % 5 == 0)
     enter_anti_poison_mode();

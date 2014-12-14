@@ -28,7 +28,9 @@ extern state_t g_clock_state;
 extern volatile bool g_24h;
 extern volatile bool g_is_am;
 
-extern int8_t g_gps_updating;  // for signalling GPS update on some displays
+extern int8_t g_gps_updating;  // for indicating GPS update on some displays
+extern int8_t g_gps_signal;  // for indicating GPS status on some displays
+
 // anodes (digits)
 pin_direct_t digit0_pin;
 pin_direct_t digit1_pin;
@@ -170,14 +172,17 @@ void display_multiplex(void)
 // Display multiplex routine for HV5812 driver
 void display_multiplex(void)
 {
-    if (dot_status && multiplex_counter == 2) {
+    if (multiplex_counter == 0 && g_gps_signal) {  // LH DP in tube 1
+      digitalWrite(PinMap::dot1, HIGH);
+    }
+    else if (multiplex_counter == 2 && dot_status) {  // RH DP in tube 2
       digitalWrite(PinMap::dot1, HIGH);
     }
     else {
       digitalWrite(PinMap::dot1, LOW);
     }
 
-    if (dot_status && multiplex_counter == 1) {
+    if (multiplex_counter == 1 && dot_status) {  // IN3 tube
       digitalWrite(PinMap::dot2, HIGH);
     }
     else {

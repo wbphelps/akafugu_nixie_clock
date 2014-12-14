@@ -21,6 +21,7 @@
  * 4) save menu settings in EE when changed
  * 5) support for 4800 & 9600 BPS GPS
  * 6) GPS enabled settings & menu
+ * 7) tube 1 LH DP as GPS status indicator (requires jumper wire)
  *
  */
 
@@ -104,7 +105,7 @@ volatile int8_t g_TZ_hour;
 volatile int8_t g_TZ_minute;
 volatile int8_t g_DST_offset;
 volatile bool g_DST_updated;  // DST update flag = allow update only once per day
-volatile bool g_gps_nosignal = false;
+volatile bool g_gps_signal = false;  // GPRMC message received
 volatile bool g_gps_updating = false;  // for signalling GPS update on some displays
 volatile uint16_t g_gps_timer = 0;  // for tracking how long since GPS last updated
 #endif
@@ -707,6 +708,10 @@ void loop() {
     }
     else
       _delay_us(DELAY);
+    if (g_gps_timer++ == 200) {
+      g_gps_timer = 0;
+      g_gps_signal = false;  // make GPS status indicator blink
+    }
 #else
     _delay_us(DELAY);
 #endif

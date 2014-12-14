@@ -43,7 +43,7 @@ extern int8_t g_TZ_minute;
 extern int8_t g_DST_offset;  // DST offset in Hours
 extern bool g_DST_updated;  // DST update flag = allow update only once per day
 extern bool g_gps_updating;  // for signalling GPS update on some displays
-extern bool g_gps_nosignal;
+extern bool g_gps_signal;
 extern uint16_t g_gps_timer;
 
 // debugging counters 
@@ -200,6 +200,8 @@ void parseGPSdata(char *gpsBuffer) {
       gpsFixStat = ptr[0];
       if (gpsFixStat == 'A') {  // if data valid, parse time & date
 //        gpsTimeout = 0;  // reset gps timeout counter
+        g_gps_signal = true; // GPRMC received
+        g_gps_timer = 0; // reset GPS timeout counter
         for (uint8_t n=0; n<7; n++) { // skip 6 tokend, find date
           ptr = ntok(ptr);  // Find the next token
           if (ptr == NULL) goto GPSerrorP; // error if not found
@@ -227,8 +229,6 @@ void parseGPSdata(char *gpsBuffer) {
           if (((tm.sec<5) && (tDelta>10)) || (tDelta>=60)) {  // update RTC once/minute or if it's been 60 seconds
             //beep(1000, 1);  // debugging
             g_gps_updating = true;  // time is being set from GPS data
-            g_gps_nosignal = false; // reset no signal flag
-            g_gps_timer = 0; // reset GPS timeout counter
             tGPSupdate = tNow;  // remember time of this update
             tNow = tNow + (long)(g_TZ_hour + g_DST_offset) * SECS_PER_HOUR;  // add time zone hour offset & DST offset
             if (g_TZ_hour < 0)  // add or subtract time zone minute offset

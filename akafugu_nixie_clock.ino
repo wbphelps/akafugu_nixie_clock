@@ -120,6 +120,7 @@ volatile bool g_screensaver_on = false;
 // Settings (saved to EEPROM)
 // 24 hour display mode
 volatile bool g_24h = true;
+volatile bool g_show_pm = false;  // show PM indicator
 // Dots setting (0 - off, 1 - on, 2 - blink)
 volatile uint8_t g_dots_setting = 2;
 // Leading zeros in hour display
@@ -493,9 +494,20 @@ void read_rtc(void)
   }
 
   g_is_am = t->am;
-  uint8_t hour = g_24h ? t->hour : t->twelveHour;
-  if (!g_24h && hour == 0)  // show 12 for midnight and noon - wbp
-    hour = 12;  // wbp
+  
+  uint8_t hour;
+  if (g_24h) {
+    hour = t->hour;
+  }
+  else {
+    hour = t->twelveHour;
+    if (hour == 0)
+      hour = 12;
+    if (!t->am)
+      g_show_pm = true;
+    else
+      g_show_pm = false;
+  }
 
   if (g_display_mode == 0) { // primary display mode
     
@@ -708,7 +720,7 @@ void loop() {
     }
     else
       _delay_us(DELAY);
-    if (g_gps_timer++ == 200) {
+    if (g_gps_timer++ == 10000) {  // reset GPS signal indicator after ??? seconds of no signal
       g_gps_timer = 0;
       g_gps_signal = false;  // make GPS status indicator blink
     }

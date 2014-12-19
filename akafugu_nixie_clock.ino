@@ -22,7 +22,10 @@
  * 5) support for 4800 & 9600 BPS GPS
  * 6) GPS enabled settings & menu
  * 7) tube 1 LH DP as GPS status indicator (requires jumper wire)
+ * 8) blink both DPs during antipoison routine
  *
+ * TODO:
+ * -) unblank display when button pushed (time setting, menu)
  */
 
 #include "global.h"
@@ -85,6 +88,12 @@ volatile uint8_t g_alarm_switch;
 // countdown timer for how long to show current alarm
 volatile uint8_t g_show_alarm_counter;
 
+// DP (decimal point) display control
+volatile bool g_LHDP = false;  // left hand DP (am/pm indicator)
+volatile bool g_RHDP = false;  // right hand DP (GPS signal status)
+bool save_LHDP;
+bool save_RHDP;
+
 // test mode counter
 volatile uint8_t g_test_counter;
 
@@ -105,22 +114,21 @@ volatile int8_t g_TZ_hour;
 volatile int8_t g_TZ_minute;
 volatile int8_t g_DST_offset;
 volatile bool g_DST_updated;  // DST update flag = allow update only once per day
-volatile bool g_gps_signal = false;  // GPRMC message received
+//volatile bool g_gps_signal = false;  // GPRMC message received
 volatile bool g_gps_updating = false;  // for signalling GPS update on some displays
 volatile uint16_t g_gps_timer = 0;  // for tracking how long since GPS last updated
 #endif
 
 // Display sleep mode
-#define SLEEP_MODE_START_TIME 21 // sleep mode starts at 21:00 at night
+#define SLEEP_MODE_START_TIME 22 // sleep mode starts at 22:00 at night
 #define SLEEP_MODE_END_TIME 7   // sleep mode ends at 7:00 in the morning
 // Display sleep mode
-volatile bool g_screensaver_on = false;
+//volatile bool g_screensaver_on = false;
 
 ///////////////////////
 // Settings (saved to EEPROM)
 // 24 hour display mode
 volatile bool g_24h = true;
-volatile bool g_show_pm = false;  // show PM indicator
 // Dots setting (0 - off, 1 - on, 2 - blink)
 volatile uint8_t g_dots_setting = 2;
 // Leading zeros in hour display
@@ -435,6 +443,8 @@ void enter_anti_poison_mode()
   g_test_counter = 0;
   g_clock_state = STATE_ANTIPOISON;
   push_backlight_mode();
+  save_LHDP = g_LHDP;
+  save_RHDP = g_RHDP;
 }
 
 void read_rtc(void)
@@ -456,21 +466,25 @@ void read_rtc(void)
   // check for display sleep mode
   // jgl - allow start time in evening, turn off LED backlights as well
 
-  if (g_screensaver && (SLEEP_MODE_START_TIME < SLEEP_MODE_END_TIME) && (t->hour >= SLEEP_MODE_START_TIME && t->hour < SLEEP_MODE_END_TIME)) {
-    g_screensaver_on = true;
+  if (g_screensaver && g_clock_state == STATE_CLOCK) {
+    if ((SLEEP_MODE_START_TIME < SLEEP_MODE_END_TIME) && (t->hour >= SLEEP_MODE_START_TIME && t->hour < SLEEP_MODE_END_TIME)) {
+      display_on = false;
+    }
+    else if ((SLEEP_MODE_START_TIME > SLEEP_MODE_END_TIME) && (t->hour >= SLEEP_MODE_START_TIME || t->hour < SLEEP_MODE_END_TIME)) {
+      display_on = false;
+    }
+    else {
+      display_on = true;
+    }
   }
-  else if (g_screensaver && (SLEEP_MODE_START_TIME > SLEEP_MODE_END_TIME) && (t->hour >= SLEEP_MODE_START_TIME || t->hour < SLEEP_MODE_END_TIME)) {
-    g_screensaver_on = true;
-  }
-  else {
-    g_screensaver_on = false;
-  }
+  else
+    display_on = true;
 
-  if (g_screensaver_on) {  // blank the display and LEDs
-    data[0] = data[1] = data[2] = data[3] = data[4] = data[5] = 10;
-    set_dots(false, false);
-    return;
-  }
+//  if (g_screensaver_on) {  // blank the display and LEDs
+//    data[0] = data[1] = data[2] = data[3] = data[4] = data[5] = 10;
+//    set_dots(false, false);
+//    return;
+//  }
  
   // check if it is time for anti-poisoning routine
   if (g_antipoison && t->sec < 1 && t->min % 5 == 0)
@@ -504,9 +518,9 @@ void read_rtc(void)
     if (hour == 0)
       hour = 12;
     if (!t->am)
-      g_show_pm = true;
+      g_LHDP = true;  // turn on PM indicator
     else
-      g_show_pm = false;
+      g_LHDP = false;
   }
 
   if (g_display_mode == 0) { // primary display mode
@@ -720,9 +734,10 @@ void loop() {
     }
     else
       _delay_us(DELAY);
+// ToDo: sort out what the time interval is for the main Loop so we can adjust the GPS signal timeout
     if (g_gps_timer++ == 10000) {  // reset GPS signal indicator after ??? seconds of no signal
       g_gps_timer = 0;
-      g_gps_signal = false;  // make GPS status indicator blink
+      g_RHDP = false;  // make GPS status indicator blink
     }
 #else
     _delay_us(DELAY);
@@ -1097,10 +1112,19 @@ void loop() {
             data[2] = rnd() % 10;
             data[4] = rnd() % 10;
           }
-          else if (antipoison_counter % 4 == 1) {
+          else if (antipoison_counter % 4 == 2) {
             data[1] = rnd() % 10;
             data[3] = rnd() % 10;
             data[5] = rnd() % 10;            
+          }
+
+          if (antipoison_counter % 40 < 20) {
+            g_LHDP = true;
+            g_RHDP = false;
+          }
+          else {
+            g_LHDP = false;
+            g_RHDP = true;
           }
           
           if (antipoison_counter++ == 0x01ff) {
@@ -1109,6 +1133,8 @@ void loop() {
             g_update_rtc = true;
             g_update_backlight = true;
             rotary.restore();
+            g_LHDP = save_LHDP;
+            g_RHDP = save_RHDP;
             
             g_clock_state = STATE_CLOCK;
             antipoison_counter = 0;

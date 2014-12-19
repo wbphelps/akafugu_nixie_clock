@@ -29,8 +29,8 @@ extern volatile bool g_24h;
 extern volatile bool g_is_am;
 
 extern int8_t g_gps_updating;  // for indicating GPS update on some displays
-extern int8_t g_gps_signal;  // for indicating GPS status on some displays
-extern volatile bool g_show_pm;  // am/pm indicator
+extern int8_t g_RHDP;  // for indicating GPS status on some displays
+extern volatile bool g_LHDP;  // am/pm indicator
 
 // anodes (digits)
 pin_direct_t digit0_pin;
@@ -175,10 +175,10 @@ void display_multiplex(void)
 {
   // Tube 1 LH DP is PM indicator
   // Tube 4 RH DP is GPS status
-    if (multiplex_counter == 0 && g_show_pm) {  // LH DP in tube 1
+    if (display_on && multiplex_counter == 0 && g_LHDP) {  // LH DP in tube 1
       digitalWrite(PinMap::dot1, HIGH);
     }
-    else if (multiplex_counter == 2 && g_gps_signal) {  // RH DP in tube 2
+    else if (display_on && multiplex_counter == 2 && g_RHDP) {  // RH DP in tube 2
       digitalWrite(PinMap::dot1, HIGH);
     }
     else {

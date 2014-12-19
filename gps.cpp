@@ -43,7 +43,7 @@ extern int8_t g_TZ_minute;
 extern int8_t g_DST_offset;  // DST offset in Hours
 extern bool g_DST_updated;  // DST update flag = allow update only once per day
 extern bool g_gps_updating;  // for signalling GPS update on some displays
-extern bool g_gps_signal;
+extern bool g_RHDP;  // GPS signal status indicator
 extern uint16_t g_gps_timer;
 
 // debugging counters 
@@ -200,7 +200,7 @@ void parseGPSdata(char *gpsBuffer) {
       gpsFixStat = ptr[0];
       if (gpsFixStat == 'A') {  // if data valid, parse time & date
 //        gpsTimeout = 0;  // reset gps timeout counter
-        g_gps_signal = true; // GPRMC received
+        g_RHDP = true; // GPRMC received
         g_gps_timer = 0; // reset GPS timeout counter
         for (uint8_t n=0; n<7; n++) { // skip 6 tokend, find date
           ptr = ntok(ptr);  // Find the next token
